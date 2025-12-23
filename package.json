@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vercel/kv": "^3.0.0",
     "firebase": "^12.7.0",
     "openai": "^4.77.0",
     "react": "^19.2.3",

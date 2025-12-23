@@ -1,7 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { kv } from '@vercel/kv';
 
-// In-memory storage (will reset on cold starts, but good enough for demo)
+// Fallback to in-memory if KV not configured
 const rooms = new Map<string, any>();
+const useKV = !!process.env.KV_REST_API_URL;
 
 // Auto-cleanup old rooms (older than 30 minutes)
 const cleanupOldRooms = () => {
@@ -29,29 +31,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { method } = req;
   const { roomId } = req.query;
 
+  console.log(`[ROOMS API] ${method} request, roomId: ${roomId}`);
+  console.log(`[ROOMS API] Using storage: ${useKV ? 'Vercel KV' : 'In-Memory (unreliable)'}`);
+
   try {
     switch (method) {
       case 'POST': {
         // Create new room
         const { roomId: newRoomId, initialState } = req.body;
-        rooms.set(newRoomId, {
+        console.log(`[ROOMS API] Creating room: ${newRoomId}`);
+
+        const roomData = {
           ...initialState,
           lastUpdate: Date.now(),
           hostConnected: true,
           guestConnected: false
-        });
+        };
+
+        if (useKV) {
+          await kv.set(`room:${newRoomId}`, roomData, { ex: 1800 }); // 30 min expiry
+          console.log(`[ROOMS API] Room saved to KV: ${newRoomId}`);
+        } else {
+          rooms.set(newRoomId, roomData);
+          console.log(`[ROOMS API] Room saved to memory: ${newRoomId} (Total: ${rooms.size})`);
+        }
+
         return res.status(200).json({ success: true, roomId: newRoomId });
       }
 
       case 'GET': {
         // Get room state
         if (!roomId || typeof roomId !== 'string') {
+          console.log(`[ROOMS API] GET failed - no roomId provided`);
           return res.status(400).json({ error: 'Room ID required' });
         }
-        const room = rooms.get(roomId);
-        if (!room) {
-          return res.status(404).json({ error: 'Room not found' });
+
+        let room;
+        if (useKV) {
+          room = await kv.get(`room:${roomId}`);
+          console.log(`[ROOMS API] KV lookup for ${roomId}: ${room ? 'FOUND' : 'NOT FOUND'}`);
+        } else {
+          room = rooms.get(roomId);
+          console.log(`[ROOMS API] Memory lookup for ${roomId}: ${room ? 'FOUND' : 'NOT FOUND'}`);
+          console.log(`[ROOMS API] Available rooms in memory: ${Array.from(rooms.keys()).join(', ') || 'NONE'}`);
         }
+
+        if (!room) {
+          return res.status(404).json({ error: 'Room not found', storage: useKV ? 'kv' : 'memory' });
+        }
+
         return res.status(200).json(room);
       }
 
@@ -60,7 +88,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!roomId || typeof roomId !== 'string') {
           return res.status(400).json({ error: 'Room ID required' });
         }
-        const room = rooms.get(roomId);
+
+        let room;
+        if (useKV) {
+          room = await kv.get(`room:${roomId}`);
+          console.log(`[ROOMS API] KV update lookup for ${roomId}: ${room ? 'FOUND' : 'NOT FOUND'}`);
+        } else {
+          room = rooms.get(roomId);
+          console.log(`[ROOMS API] Memory update lookup for ${roomId}: ${room ? 'FOUND' : 'NOT FOUND'}`);
+        }
+
         if (!room) {
           return res.status(404).json({ error: 'Room not found' });
         }
@@ -81,13 +118,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
 
-        rooms.set(roomId, {
+        const updatedRoom = {
           ...room,
           ...state,
           players: mergedPlayers,
           lastUpdate: Date.now(),
           guestConnected: isGuest ? true : room.guestConnected
-        });
+        };
+
+        if (useKV) {
+          await kv.set(`room:${roomId}`, updatedRoom, { ex: 1800 });
+          console.log(`[ROOMS API] Room updated in KV: ${roomId}`);
+        } else {
+          rooms.set(roomId, updatedRoom);
+          console.log(`[ROOMS API] Room updated in memory: ${roomId}`);
+        }
+
         return res.status(200).json({ success: true });
       }
 
@@ -96,7 +142,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!roomId || typeof roomId !== 'string') {
           return res.status(400).json({ error: 'Room ID required' });
         }
-        rooms.delete(roomId);
+
+        if (useKV) {
+          await kv.del(`room:${roomId}`);
+          console.log(`[ROOMS API] Room deleted from KV: ${roomId}`);
+        } else {
+          rooms.delete(roomId);
+          console.log(`[ROOMS API] Room deleted from memory: ${roomId}`);
+        }
+
         return res.status(200).json({ success: true });
       }
 
