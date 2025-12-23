@@ -15,6 +15,7 @@ export class RoomService {
 
   async createRoom(roomId: string, initialState: RoomState): Promise<boolean> {
     try {
+      console.log('🎲 Creating room:', roomId);
       const response = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -22,39 +23,60 @@ export class RoomService {
       });
 
       if (!response.ok) {
-        console.error('Failed to create room:', await response.text());
+        const errorText = await response.text();
+        console.error('❌ Failed to create room:', errorText);
         return false;
       }
 
+      const result = await response.json();
+      console.log('✅ Room created successfully:', result);
+
       this.roomId = roomId;
       this.isHost = true;
-      console.log('✅ Room created:', roomId);
+      console.log('✅ Room ID set:', roomId);
       return true;
     } catch (error) {
-      console.error('Create room error:', error);
+      console.error('❌ Create room error:', error);
       return false;
     }
   }
 
   async joinRoom(roomId: string): Promise<boolean> {
     try {
+      console.log('🔍 Looking for room:', roomId);
       const response = await fetch(`/api/rooms?roomId=${roomId}`);
 
       if (!response.ok) {
-        console.error('Room not found');
+        const errorText = await response.text();
+        console.error('❌ Room not found:', errorText);
         return false;
       }
+
+      const roomData = await response.json();
+      console.log('✅ Room found:', roomData);
 
       this.roomId = roomId;
       this.isHost = false;
 
-      // Mark guest as connected
-      await this.updateState({} as RoomState, true);
+      // Mark guest as connected with retry
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          await this.updateState({} as RoomState, true);
+          console.log('✅ Guest marked as connected');
+          break;
+        } catch (err) {
+          retries--;
+          console.log(`⚠️ Failed to mark connected, retries left: ${retries}`);
+          if (retries === 0) throw err;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
 
       console.log('✅ Joined room:', roomId);
       return true;
     } catch (error) {
-      console.error('Join room error:', error);
+      console.error('❌ Join room error:', error);
       return false;
     }
   }

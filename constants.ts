@@ -16,4 +16,4 @@ export const CONSONANTS = [
 ];
 
 export const MAX_SCORE = 100;
-export const TURN_TIME = 30; // seconds
+export const TURN_TIME = 60; // seconds

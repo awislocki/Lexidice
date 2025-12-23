@@ -175,6 +175,9 @@ const App: React.FC = () => {
     console.log('connectToHost called with ID:', id);
     const cleanId = id.trim().toUpperCase();
 
+    // Small delay to ensure room is created on server
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     const success = await roomServiceRef.current.joinRoom(cleanId);
 
     if (success) {
@@ -256,12 +259,30 @@ const App: React.FC = () => {
     const myId = role === NetworkRole.GUEST ? 2 : 1;
     if (players.find(p => p.id === myId)?.isCommitted) return;
 
-    const updatedPlayers = players.map(p => p.id === myId ? { ...p, currentWord: word.toUpperCase() } : p);
+    // Validate input - only letters and must be available in dice
+    const upperWord = word.toUpperCase();
+
+    // Check if word uses only available letters
+    const diceLetters = dice.map(d => d.letter);
+    const wordLetters = upperWord.split('');
+    const isValid = wordLetters.every(letter => {
+      const neededCount = wordLetters.filter(l => l === letter).length;
+      const availableCount = diceLetters.filter(l => l === letter).length;
+      return availableCount >= neededCount && /^[A-Z]$/.test(letter);
+    });
+
+    // Only update if valid or empty (allow backspace)
+    if (!isValid && upperWord.length > 0) {
+      console.log('❌ Invalid word - uses unavailable letters');
+      return;
+    }
+
+    const updatedPlayers = players.map(p => p.id === myId ? { ...p, currentWord: upperWord } : p);
     setPlayers(updatedPlayers);
 
     // Guest sends word update through room service
     if (role === NetworkRole.GUEST) {
-      console.log('📤 Guest sending word update:', word.toUpperCase());
+      console.log('📤 Guest sending word update:', upperWord);
       roomServiceRef.current.updateState({ players: updatedPlayers }, true);
     }
   };
