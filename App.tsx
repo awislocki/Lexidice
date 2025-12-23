@@ -276,7 +276,7 @@ const App: React.FC = () => {
     }
 
     conn.on('open', () => {
-      console.log('✅ Connection OPEN event fired!');
+      console.log('✅ Connection OPEN event fired! conn.open:', conn.open, 'conn.peer:', conn.peer);
       setIsConnected(true);
       // Clear timeout on successful connection
       if (connectionTimeoutRef.current) {
@@ -284,8 +284,11 @@ const App: React.FC = () => {
         connectionTimeoutRef.current = null;
       }
       // If we're the host, send initial sync when connection opens
-      console.log('Connection opened, triggering initial sync');
-      setTimeout(() => syncToGuest(), 100);  // Small delay to ensure state is ready
+      console.log('Connection opened, triggering initial sync in 100ms');
+      setTimeout(() => {
+        console.log('Initial sync timeout fired');
+        syncToGuest();
+      }, 100);  // Small delay to ensure state is ready
     });
 
     conn.on('data', (data: NetworkMessage) => {
@@ -346,7 +349,13 @@ const App: React.FC = () => {
   };
 
   useEffect(() => { if (role === NetworkRole.LOCAL) setupPeer(); }, []);
-  useEffect(() => { if (role === NetworkRole.HOST) syncToGuest(); }, [status, players, dice, timeLeft, turnResult, isJudging, role, syncToGuest]);
+  useEffect(() => {
+    console.log('Sync useEffect triggered. status:', status, 'role:', role);
+    if (role === NetworkRole.HOST) {
+      console.log('Calling syncToGuest from useEffect');
+      syncToGuest();
+    }
+  }, [status, players, dice, timeLeft, turnResult, isJudging, role, syncToGuest]);
 
   const rollDice = useCallback(() => {
     const newDice: DiceLetter[] = [];
@@ -364,12 +373,21 @@ const App: React.FC = () => {
   }, []);
 
   const startGame = () => {
-    if (role === NetworkRole.GUEST) return;
+    console.log('startGame called, role:', role);
+    if (role === NetworkRole.GUEST) {
+      console.log('Guest cannot start game, returning');
+      return;
+    }
+    console.log('Starting game as HOST');
     setStatus(GameStatus.ROLLING);
     setTurnResult(null);
     setPlayers(prev => prev.map(p => ({ ...p, isCommitted: false, currentWord: '' })));
     rollDice();
-    setTimeout(() => { setStatus(GameStatus.PLAYING); setTimeLeft(TURN_TIME); }, 1500);
+    setTimeout(() => {
+      console.log('Setting status to PLAYING');
+      setStatus(GameStatus.PLAYING);
+      setTimeLeft(TURN_TIME);
+    }, 1500);
   };
 
   const handleWordChange = (word: string) => {
