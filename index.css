@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: #030712;
+    color: #f8fafc;
+    overflow-x: hidden;
+}
+
+.bungee {
+    font-family: 'Bungee Spice', cursive;
+}
+
+.dice-roll {
+    animation: roll 0.6s ease-out;
+}
+
+@keyframes roll {
+    0% { transform: rotate(0deg) scale(0.5); opacity: 0; }
+    50% { transform: rotate(180deg) scale(1.1); }
+    100% { transform: rotate(360deg) scale(1); opacity: 1; }
+}
