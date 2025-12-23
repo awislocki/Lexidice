@@ -20,21 +20,28 @@ const CopyIcon = () => (
 );
 
 const ScaleIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></svg>
+);
+
+const TrophyIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
 );
 
 const CheckIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
 );
 
-// Fix: Use React.FC to allow standard attributes like 'key' when mapping over arrays in JSX
-const LogoDiceLetter: React.FC<{ letter: string; color?: string }> = ({ letter, color = "bg-indigo-600" }) => (
-  <div className={`w-8 h-8 md:w-10 md:h-10 ${color} rounded-lg flex items-center justify-center font-black text-white text-lg md:text-xl shadow-[inset_-2px_-2px_0_rgba(0,0,0,0.3),2px_2px_5px_rgba(0,0,0,0.5)] transform hover:rotate-6 transition-transform relative border border-white/10`}>
+const LogoDiceLetter: React.FC<{ letter: string; color?: string; size?: string }> = ({ 
+  letter, 
+  color = "bg-indigo-600",
+  size = "w-8 h-8 md:w-10 md:h-10"
+}) => (
+  <div className={`${size} ${color} rounded-lg flex items-center justify-center font-black text-white text-lg md:text-xl shadow-[inset_-2px_-3px_0_rgba(0,0,0,0.2),2px_4px_10px_rgba(0,0,0,0.5)] transform transition-transform relative border border-white/20 select-none group-hover:scale-110`}>
     {letter}
-    <div className="absolute top-1 left-1 w-1 h-1 bg-white/20 rounded-full"></div>
-    <div className="absolute top-1 right-1 w-1 h-1 bg-white/20 rounded-full"></div>
-    <div className="absolute bottom-1 left-1 w-1 h-1 bg-white/20 rounded-full"></div>
-    <div className="absolute bottom-1 right-1 w-1 h-1 bg-white/20 rounded-full"></div>
+    <div className="absolute top-1 left-1 w-0.5 h-0.5 md:w-1 md:h-1 bg-white/30 rounded-full"></div>
+    <div className="absolute top-1 right-1 w-0.5 h-0.5 md:w-1 md:h-1 bg-white/30 rounded-full"></div>
+    <div className="absolute bottom-1 left-1 w-0.5 h-0.5 md:w-1 md:h-1 bg-white/30 rounded-full"></div>
+    <div className="absolute bottom-1 right-1 w-0.5 h-0.5 md:w-1 md:h-1 bg-white/30 rounded-full"></div>
   </div>
 );
 
@@ -224,7 +231,9 @@ const App: React.FC = () => {
     setTurnResult(result);
     setPlayers(prev => prev.map(p => {
       const turnPoints = p.id === 1 ? result.p1Points : result.p2Points;
-      return { ...p, score: p.score + turnPoints, lastWordScore: turnPoints, isCommitted: false };
+      const newTotal = p.score + turnPoints;
+      // Win condition check happens in the useEffect usually, but we update score here
+      return { ...p, score: newTotal, lastWordScore: turnPoints, isCommitted: false };
     }));
     setIsJudging(false);
   }, [dice, status, isJudging]);
@@ -247,13 +256,19 @@ const App: React.FC = () => {
     return () => { if (timerRef.current) clearInterval(timerRef.current as any); };
   }, [status, role, submitTurn, players]);
 
+  useEffect(() => {
+    if (players.some(p => p.score >= MAX_SCORE) && status === GameStatus.JUDGING && !isJudging) {
+      setStatus(GameStatus.GAME_OVER);
+    }
+  }, [players, status, isJudging]);
+
   const renderLobby = () => (
     <div className="flex flex-col items-center justify-center min-h-[75vh] text-center space-y-12 animate-in fade-in duration-700">
       <div className="flex flex-col items-center">
-        <div className="flex gap-1 md:gap-2 mb-4">
-          {"LEXI".split('').map((l, i) => <LogoDiceLetter key={i} letter={l} color="bg-indigo-600" />)}
+        <div className="flex gap-1 md:gap-2 mb-6">
+          {"LEXI".split('').map((l, i) => <LogoDiceLetter key={`lexi-${i}`} letter={l} color="bg-indigo-600" size="w-10 h-10 md:w-16 md:h-16" />)}
           <div className="w-2 md:w-4"></div>
-          {"DICE".split('').map((l, i) => <LogoDiceLetter key={i} letter={l} color="bg-pink-600" />)}
+          {"DICE".split('').map((l, i) => <LogoDiceLetter key={`dice-${i}`} letter={l} color="bg-pink-600" size="w-10 h-10 md:w-16 md:h-16" />)}
         </div>
         <div className="inline-block bg-indigo-600/20 text-indigo-400 text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-widest border border-indigo-500/30">
           {isConnected ? 'LIVE CONNECTION' : 'P2P MULTIPLAYER'}
@@ -440,18 +455,18 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#030712] text-slate-50 p-4 md:p-8 selection:bg-indigo-500 selection:text-white">
       <nav className="flex items-center justify-between mb-8 max-w-6xl mx-auto border-b border-slate-800 pb-6">
         <div className="flex items-center space-x-3 cursor-pointer group" onClick={() => { if(window.confirm('Abandon this duel?')) { localStorage.clear(); window.location.reload(); } }}>
-          <div className="flex gap-0.5">
-            <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center font-black text-white text-lg shadow-lg rotate-[-3deg] group-hover:rotate-0 transition-transform">L</div>
-            <div className="w-8 h-8 bg-pink-600 rounded flex items-center justify-center font-black text-white text-lg shadow-lg rotate-[3deg] group-hover:rotate-0 transition-transform">D</div>
+          <div className="flex gap-1 items-center">
+            <LogoDiceLetter letter="L" color="bg-indigo-600" size="w-8 h-8 md:w-10 md:h-10" />
+            <LogoDiceLetter letter="D" color="bg-pink-600" size="w-8 h-8 md:w-10 md:h-10" />
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col ml-1">
             <span className="font-black tracking-tighter text-xl leading-none">LEXIDICE</span>
-            <span className="text-[7px] font-black text-slate-600 uppercase tracking-[0.4em]">Multiplayer v3.0</span>
+            <span className="text-[7px] font-black text-slate-600 uppercase tracking-[0.4em]">Multiplayer v3.1</span>
           </div>
         </div>
         <div className="flex gap-4 bg-slate-900/80 px-5 py-2.5 rounded-2xl border border-slate-800 shadow-xl">
           <div className="flex items-center gap-3">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-slate-700'}`}></div>
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-slate-700'}`}></div>
             <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isConnected ? 'text-green-500' : 'text-slate-500'}`}>
               {role === NetworkRole.LOCAL ? 'OFFLINE MODE' : isConnected ? 'NETWORK STABLE' : 'LINKING...'}
             </span>
@@ -469,8 +484,9 @@ const App: React.FC = () => {
                 <h1 className="text-[10rem] md:text-[14rem] font-black text-white/5 absolute -top-24 left-1/2 -translate-x-1/2 select-none">DUEL</h1>
                 <h1 className="text-7xl md:text-9xl bungee text-yellow-400">FINIS</h1>
              </div>
-             <div className="bg-slate-900/80 p-16 rounded-[4rem] border-8 border-indigo-600 shadow-[0_0_100px_rgba(79,70,229,0.2)] relative backdrop-blur-xl">
+             <div className="bg-slate-900/80 p-16 rounded-[4rem] border-8 border-indigo-600 shadow-[0_0_100px_rgba(79,70,229,0.2)] relative backdrop-blur-xl flex flex-col items-center">
                 <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-8 py-2 rounded-full font-black uppercase text-sm tracking-[0.3em]">SUPREME VICTOR</div>
+                <TrophyIcon className="text-yellow-400 mb-6 drop-shadow-[0_0_20px_rgba(250,204,21,0.4)]" />
                 <div className="text-7xl md:text-8xl font-black text-white tracking-tighter mb-4">
                     {players[0].score > players[1].score ? players[0].name : players[1].name}
                 </div>
@@ -485,9 +501,9 @@ const App: React.FC = () => {
       
       <footer className="mt-32 mb-10 flex flex-col items-center opacity-10 grayscale hover:grayscale-0 hover:opacity-50 transition-all cursor-default">
         <div className="flex gap-2 mb-4">
-           {"LEXIDICE".split('').map((l, i) => <div key={i} className="w-4 h-4 bg-white/20 rounded-sm flex items-center justify-center text-[8px] font-black">{l}</div>)}
+           {"LEXIDICE".split('').map((l, i) => <div key={`footer-${i}`} className="w-4 h-4 bg-white/20 rounded-sm flex items-center justify-center text-[8px] font-black">{l}</div>)}
         </div>
-        <span className="text-[8px] uppercase font-black tracking-[1em]">Protocol Layer 2.7.4</span>
+        <span className="text-[8px] uppercase font-black tracking-[1em]">Protocol Layer 2.7.5</span>
       </footer>
     </div>
   );
