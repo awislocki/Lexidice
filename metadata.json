@@ -1,0 +1,5 @@
+{
+  "name": "LexiDice Duel",
+  "description": "A competitive two-player word game where players duel using a shared pool of letters rolled from dice. Includes AI-powered word validation and witty commentary.",
+  "requestFramePermissions": []
+}
