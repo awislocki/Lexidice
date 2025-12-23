@@ -137,6 +137,10 @@ const App: React.FC = () => {
 
     // @ts-ignore
     const peer = new window.Peer(customId, {
+      host: '0.peerjs.com',
+      port: 443,
+      path: '/',
+      secure: true,
       config: {
         iceServers: [
           // Google STUN
@@ -164,7 +168,7 @@ const App: React.FC = () => {
         iceTransportPolicy: 'all',
         iceCandidatePoolSize: 10
       },
-      debug: 2 // Enable debug logging
+      debug: 3 // Maximum debug logging
     });
     peerRef.current = peer;
 
@@ -231,7 +235,11 @@ const App: React.FC = () => {
     }
     const cleanId = id.trim().toUpperCase();
     console.log('Attempting to connect to:', cleanId);
-    const conn = peerRef.current.connect(cleanId);
+    const conn = peerRef.current.connect(cleanId, {
+      reliable: true,  // Use reliable data channel
+      serialization: 'json'
+    });
+    console.log('Connection object created:', conn);
     connRef.current = conn;
     setTargetId(cleanId);
     setRole(NetworkRole.GUEST);
