@@ -186,9 +186,14 @@ const App: React.FC = () => {
   };
 
   const connectToHost = (id: string) => {
+    console.log('connectToHost called with ID:', id);
     if (!peerRef.current) {
+        console.log('No peer exists, creating one...');
         setupPeer();
-        setTimeout(() => connectToHost(id), 500);
+        setTimeout(() => {
+          console.log('Retrying connection after peer creation...');
+          connectToHost(id);
+        }, 500);
         return;
     }
     const cleanId = id.trim().toUpperCase();
@@ -410,7 +415,10 @@ const App: React.FC = () => {
           {role === NetworkRole.LOCAL ? (
             <div className="flex flex-col md:flex-row gap-4">
               <button onClick={startHosting} className="flex-1 py-4 bg-indigo-600 rounded-2xl font-black hover:bg-indigo-500 transition-all shadow-lg active:scale-95 text-sm uppercase tracking-widest">HOST DUEL</button>
-              <button onClick={() => setRole(NetworkRole.GUEST)} className="flex-1 py-4 bg-slate-800 rounded-2xl font-black hover:bg-slate-700 transition-all border border-slate-600 active:scale-95 text-sm uppercase tracking-widest">JOIN DUEL</button>
+              <button onClick={() => {
+                console.log('JOIN DUEL clicked, setting role to GUEST');
+                setRole(NetworkRole.GUEST);
+              }} className="flex-1 py-4 bg-slate-800 rounded-2xl font-black hover:bg-slate-700 transition-all border border-slate-600 active:scale-95 text-sm uppercase tracking-widest">JOIN DUEL</button>
             </div>
           ) : role === NetworkRole.HOST ? (
             <div className="space-y-4">
@@ -438,7 +446,10 @@ const App: React.FC = () => {
                   className="flex-grow bg-black/50 p-5 rounded-2xl font-black text-3xl text-center border-2 border-slate-700 outline-none focus:border-pink-500 tracking-[0.2em] text-white uppercase"
                   placeholder="KEY..."
                 />
-                <button onClick={() => connectToHost(targetId)} className="px-10 bg-pink-600 rounded-2xl font-black hover:bg-pink-500 transition-all shadow-lg active:scale-95"><CheckIcon /></button>
+                <button onClick={() => {
+                  console.log('Connect button clicked, targetId:', targetId);
+                  connectToHost(targetId);
+                }} className="px-10 bg-pink-600 rounded-2xl font-black hover:bg-pink-500 transition-all shadow-lg active:scale-95"><CheckIcon /></button>
               </div>
               <button onClick={() => setRole(NetworkRole.LOCAL)} className="text-[10px] font-black text-slate-600 hover:text-white underline tracking-widest uppercase">Go Back</button>
             </div>
