@@ -78,9 +78,10 @@ const App: React.FC = () => {
       setDice(parsed.dice);
       setTimeLeft(parsed.timeLeft);
       setTurnResult(parsed.turnResult);
-      setRole(parsed.role);
-      setTargetId(parsed.targetId || '');
-      if (parsed.peerId) setPeerId(parsed.peerId);
+      // Don't restore role - network connections don't persist across page reloads
+      // setRole(parsed.role);
+      // setTargetId(parsed.targetId || '');
+      // if (parsed.peerId) setPeerId(parsed.peerId);
     }
   }, []);
 
