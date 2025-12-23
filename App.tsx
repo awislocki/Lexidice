@@ -65,6 +65,10 @@ const App: React.FC = () => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Debug console for mobile
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+
   const saveState = useCallback(() => {
     const data = { status, players, dice, timeLeft, turnResult, role, targetId, peerId };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -88,6 +92,24 @@ const App: React.FC = () => {
 
   useEffect(() => { saveState(); }, [saveState]);
 
+  // Capture console logs for mobile debugging
+  useEffect(() => {
+    const originalLog = console.log;
+    console.log = (...args: any[]) => {
+      originalLog(...args);
+      const message = args.map(arg =>
+        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+      ).join(' ');
+      setDebugLogs(prev => [
+        `${new Date().toLocaleTimeString()}: ${message}`,
+        ...prev.slice(0, 29) // Keep last 30 logs
+      ]);
+    };
+    return () => {
+      console.log = originalLog;
+    };
+  }, []);
+
   const generateFunnyId = () => {
     const word = FUNNY_WORDS[Math.floor(Math.random() * FUNNY_WORDS.length)];
     const numbers = Math.floor(Math.random() * 9000 + 1000); // 1000-9999
@@ -101,26 +123,29 @@ const App: React.FC = () => {
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          // Multiple TURN servers for better reliability
+          // Try multiple free TURN servers for redundancy
           {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            urls: 'turn:a.relay.metered.ca:80',
+            username: 'a929c5f27c3efc7555ca5e40',
+            credential: 'pXH+jiMRlGhCANBv'
           },
           {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            urls: 'turn:a.relay.metered.ca:80?transport=tcp',
+            username: 'a929c5f27c3efc7555ca5e40',
+            credential: 'pXH+jiMRlGhCANBv'
           },
           {
-            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            urls: 'turn:a.relay.metered.ca:443',
+            username: 'a929c5f27c3efc7555ca5e40',
+            credential: 'pXH+jiMRlGhCANBv'
+          },
+          {
+            urls: 'turn:a.relay.metered.ca:443?transport=tcp',
+            username: 'a929c5f27c3efc7555ca5e40',
+            credential: 'pXH+jiMRlGhCANBv'
           }
         ],
-        iceTransportPolicy: 'all', // Try all connection types
+        iceTransportPolicy: 'all',
         iceCandidatePoolSize: 10
       },
       debug: 2 // Enable debug logging
@@ -584,7 +609,35 @@ const App: React.FC = () => {
           </div>
         )}
       </main>
-      
+
+      {/* Debug Console Toggle Button */}
+      <button
+        onClick={() => setShowDebug(!showDebug)}
+        className="fixed bottom-4 right-4 w-12 h-12 bg-pink-600 text-white rounded-full shadow-lg font-black text-xs z-50 hover:bg-pink-700 active:scale-95 transition-all"
+      >
+        {showDebug ? '✕' : 'LOG'}
+      </button>
+
+      {/* Debug Console */}
+      {showDebug && (
+        <div className="fixed bottom-20 right-4 w-80 h-96 bg-black/95 border-2 border-pink-600 rounded-lg shadow-2xl z-50 flex flex-col">
+          <div className="bg-pink-600 text-white px-3 py-2 font-black text-xs flex justify-between items-center">
+            <span>DEBUG CONSOLE</span>
+            <button onClick={() => setDebugLogs([])} className="bg-pink-800 px-2 py-1 rounded text-xs hover:bg-pink-900">CLEAR</button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 font-mono text-[9px] text-green-400 space-y-1">
+            {debugLogs.length === 0 && (
+              <div className="text-gray-500">No logs yet...</div>
+            )}
+            {debugLogs.map((log, i) => (
+              <div key={i} className="border-b border-gray-800 pb-1">
+                {log}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <footer className="mt-32 mb-10 flex flex-col items-center opacity-10 grayscale hover:grayscale-0 hover:opacity-50 transition-all cursor-default">
         <div className="flex gap-2 mb-4">
            {"LEXIDICE".split('').map((l, i) => <div key={`footer-${i}`} className="w-4 h-4 bg-white/20 rounded-sm flex items-center justify-center text-[8px] font-black">{l}</div>)}

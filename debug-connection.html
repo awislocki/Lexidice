@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug P2P Connection</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .log { background: #f0f0f0; padding: 10px; margin: 5px 0; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+        input { padding: 10px; font-size: 16px; width: 300px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>PeerJS Connection Debugger</h1>
+
+    <div>
+        <button onclick="startHost()">BE HOST</button>
+        <button onclick="startGuest()">BE GUEST</button>
+    </div>
+
+    <div id="hostControls" style="display:none; margin-top: 20px;">
+        <h2>HOST</h2>
+        <p>Your ID: <strong id="hostId"></strong></p>
+        <button onclick="copyId()">Copy ID</button>
+    </div>
+
+    <div id="guestControls" style="display:none; margin-top: 20px;">
+        <h2>GUEST</h2>
+        <input id="guestInput" placeholder="Enter host ID">
+        <button onclick="connectToHost()">Connect</button>
+    </div>
+
+    <div id="logs" style="margin-top: 20px;"></div>
+
+    <script>
+        let peer = null;
+        let conn = null;
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = 'log ' + type;
+            div.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            document.getElementById('logs').prepend(div);
+            console.log(message);
+        }
+
+        function generateId() {
+            const words = ['BANANA', 'PICKLE', 'WIGGLE', 'MUFFIN', 'POTATO'];
+            const word = words[Math.floor(Math.random() * words.length)];
+            const num = Math.floor(Math.random() * 9000 + 1000);
+            return word + '-' + num;
+        }
+
+        function startHost() {
+            document.getElementById('hostControls').style.display = 'block';
+            document.getElementById('guestControls').style.display = 'none';
+
+            const id = generateId();
+            log('Creating host with ID: ' + id);
+
+            peer = new Peer(id, {
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                    ]
+                }
+            });
+
+            peer.on('open', (peerId) => {
+                log('✅ HOST READY! ID: ' + peerId, 'success');
+                document.getElementById('hostId').textContent = peerId;
+            });
+
+            peer.on('connection', (connection) => {
+                log('📞 Incoming connection from: ' + connection.peer, 'success');
+                conn = connection;
+
+                conn.on('open', () => {
+                    log('✅ CONNECTION ESTABLISHED!', 'success');
+                });
+
+                conn.on('data', (data) => {
+                    log('📨 Received: ' + data);
+                });
+            });
+
+            peer.on('error', (err) => {
+                log('❌ Error: ' + err.type + ' - ' + err.message, 'error');
+            });
+        }
+
+        function startGuest() {
+            document.getElementById('hostControls').style.display = 'none';
+            document.getElementById('guestControls').style.display = 'block';
+
+            log('Creating guest peer...');
+
+            peer = new Peer({
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                log('✅ Guest peer ready. ID: ' + id, 'success');
+            });
+
+            peer.on('error', (err) => {
+                log('❌ Error: ' + err.type + ' - ' + err.message, 'error');
+            });
+        }
+
+        function connectToHost() {
+            const hostId = document.getElementById('guestInput').value.trim().toUpperCase();
+            log('Attempting to connect to: ' + hostId);
+
+            conn = peer.connect(hostId);
+
+            conn.on('open', () => {
+                log('✅ CONNECTION ESTABLISHED!', 'success');
+                conn.send('Hello from guest!');
+            });
+
+            conn.on('data', (data) => {
+                log('📨 Received: ' + data);
+            });
+
+            conn.on('error', (err) => {
+                log('❌ Connection error: ' + err, 'error');
+            });
+
+            setTimeout(() => {
+                if (!conn.open) {
+                    log('❌ Connection timeout - could not reach host', 'error');
+                }
+            }, 10000);
+        }
+
+        function copyId() {
+            const id = document.getElementById('hostId').textContent;
+            navigator.clipboard.writeText(id);
+            log('Copied to clipboard: ' + id);
+        }
+    </script>
+</body>
+</html>
