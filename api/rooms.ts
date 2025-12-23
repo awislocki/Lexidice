@@ -65,9 +65,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(404).json({ error: 'Room not found' });
         }
         const { state, isGuest } = req.body;
+
+        // Merge players array intelligently
+        let mergedPlayers = room.players || [];
+        if (state.players && Array.isArray(state.players)) {
+          mergedPlayers = room.players.map((p: any, idx: number) => {
+            // Guest (player 2, index 1) can only update their own data
+            // Host (player 1, index 0) can update their own data
+            if (isGuest && idx === 1) {
+              return { ...p, ...state.players[idx] };
+            } else if (!isGuest && idx === 0) {
+              return { ...p, ...state.players[idx] };
+            }
+            return p;
+          });
+        }
+
         rooms.set(roomId, {
           ...room,
           ...state,
+          players: mergedPlayers,
           lastUpdate: Date.now(),
           guestConnected: isGuest ? true : room.guestConnected
         });

@@ -148,13 +148,24 @@ const App: React.FC = () => {
       setIsConnected(true);
       console.log('✅ Room created, waiting for guest');
 
-      // Start polling to detect when guest joins
+      // Start polling to detect when guest joins and get guest's updates
       roomServiceRef.current.startPolling((roomState) => {
         if (roomState.guestConnected && !guestConnected) {
           console.log('✅ Guest connected!');
           setGuestConnected(true);
         }
-      }, 1000);
+
+        // Merge guest's player data (player 2)
+        if (roomState.players && roomState.players.length >= 2) {
+          const guestPlayer = roomState.players[1];
+          if (guestPlayer.currentWord) {
+            console.log('📥 Host received guest word:', guestPlayer.currentWord, 'committed:', guestPlayer.isCommitted);
+          }
+          setPlayers(prev => prev.map(p =>
+            p.id === 2 ? { ...p, ...guestPlayer } : p
+          ));
+        }
+      }, 500);
     } else {
       alert('Failed to create room. Please try again.');
     }
@@ -191,6 +202,7 @@ const App: React.FC = () => {
   // Sync game state to room (for host)
   const syncState = useCallback(() => {
     if (role === NetworkRole.HOST) {
+      // Server will merge player 1's data only (host's player)
       roomServiceRef.current.updateState({
         status,
         players,
@@ -249,19 +261,24 @@ const App: React.FC = () => {
 
     // Guest sends word update through room service
     if (role === NetworkRole.GUEST) {
+      console.log('📤 Guest sending word update:', word.toUpperCase());
       roomServiceRef.current.updateState({ players: updatedPlayers }, true);
     }
   };
 
   const handleCommit = () => {
     const myId = role === NetworkRole.GUEST ? 2 : 1;
+    const playerWord = players.find(p => p.id === myId)?.currentWord;
 
     const updatedPlayers = players.map(p => p.id === myId ? { ...p, isCommitted: true } : p);
     setPlayers(updatedPlayers);
 
     // Guest sends commit through room service
     if (role === NetworkRole.GUEST) {
+      console.log('📤 Guest committing word:', playerWord);
       roomServiceRef.current.updateState({ players: updatedPlayers }, true);
+    } else {
+      console.log('Host committed word:', playerWord);
     }
   };
 
@@ -270,6 +287,11 @@ const App: React.FC = () => {
     setIsJudging(true);
     setStatus(GameStatus.JUDGING);
     if (timerRef.current) clearInterval(timerRef.current);
+
+    console.log('⚖️ Submitting turn for judging:');
+    console.log('  Player 1:', currentPlayers[0].currentWord);
+    console.log('  Player 2:', currentPlayers[1].currentWord);
+
     const result = await judgeWords(currentPlayers[0].name, currentPlayers[0].currentWord, currentPlayers[1].name, currentPlayers[1].currentWord, dice.map(d => d.letter));
     setTurnResult(result);
     setPlayers(prev => prev.map(p => {
