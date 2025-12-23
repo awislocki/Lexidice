@@ -443,6 +443,9 @@ const App: React.FC = () => {
         <div className="inline-block bg-indigo-600/20 text-indigo-400 text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-widest border border-indigo-500/30">
           {isConnected ? 'LIVE CONNECTION' : 'P2P MULTIPLAYER'}
         </div>
+        <div className="text-[8px] text-slate-600 font-mono mt-2">
+          DEBUG: role={role} isConnected={isConnected ? 'true' : 'false'}
+        </div>
       </div>
 
       <div className="flex flex-col items-center space-y-8 w-full max-w-2xl px-4">
@@ -512,7 +515,10 @@ const App: React.FC = () => {
 
         <button
           disabled={role === NetworkRole.GUEST || (role !== NetworkRole.LOCAL && !isConnected)}
-          onClick={startGame}
+          onClick={() => {
+            console.log('Start button clicked. Role:', role, 'isConnected:', isConnected, 'disabled:', (role === NetworkRole.GUEST || (role !== NetworkRole.LOCAL && !isConnected)));
+            startGame();
+          }}
           className="w-full py-6 bg-white text-slate-950 rounded-[2rem] font-black text-3xl shadow-[0_10px_30px_rgba(255,255,255,0.1)] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale uppercase tracking-tighter"
         >
           {role === NetworkRole.GUEST ? 'Waiting for Host' : 'Commence Battle'}
