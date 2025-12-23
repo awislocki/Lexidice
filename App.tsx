@@ -87,7 +87,11 @@ const App: React.FC = () => {
 
   useEffect(() => { saveState(); }, [saveState]);
 
-  const generateFunnyId = () => FUNNY_WORDS[Math.floor(Math.random() * FUNNY_WORDS.length)];
+  const generateFunnyId = () => {
+    const word = FUNNY_WORDS[Math.floor(Math.random() * FUNNY_WORDS.length)];
+    const numbers = Math.floor(Math.random() * 9000 + 1000); // 1000-9999
+    return `${word}-${numbers}`;
+  };
 
   const setupPeer = useCallback((customId?: string) => {
     if (peerRef.current) peerRef.current.destroy();
@@ -114,8 +118,8 @@ const App: React.FC = () => {
     peer.on('error', (err: any) => {
       console.error('Peer error:', err.type, err.message);
       if (err.type === 'unavailable-id') {
-        const nextTry = generateFunnyId().substring(0, 4) + Math.floor(Math.random() * 89 + 10);
-        setupPeer(nextTry);
+        // ID collision is extremely rare with 4-digit suffix, but retry with new ID
+        setupPeer(generateFunnyId());
       } else {
         alert('Connection error: ' + err.type + '\n' + err.message);
       }
