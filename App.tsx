@@ -139,27 +139,26 @@ const App: React.FC = () => {
     const peer = new window.Peer(customId, {
       config: {
         iceServers: [
+          // Google STUN
           { urls: 'stun:stun.l.google.com:19302' },
-          // Try multiple free TURN servers for redundancy
+          { urls: 'stun:stun1.l.google.com:19302' },
+          // Twilio STUN (more reliable)
+          { urls: 'stun:global.stun.twilio.com:3478' },
+          // Open relay TURN servers
           {
-            urls: 'turn:a.relay.metered.ca:80',
-            username: 'a929c5f27c3efc7555ca5e40',
-            credential: 'pXH+jiMRlGhCANBv'
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
           },
           {
-            urls: 'turn:a.relay.metered.ca:80?transport=tcp',
-            username: 'a929c5f27c3efc7555ca5e40',
-            credential: 'pXH+jiMRlGhCANBv'
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
           },
           {
-            urls: 'turn:a.relay.metered.ca:443',
-            username: 'a929c5f27c3efc7555ca5e40',
-            credential: 'pXH+jiMRlGhCANBv'
-          },
-          {
-            urls: 'turn:a.relay.metered.ca:443?transport=tcp',
-            username: 'a929c5f27c3efc7555ca5e40',
-            credential: 'pXH+jiMRlGhCANBv'
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
           }
         ],
         iceTransportPolicy: 'all',
@@ -178,12 +177,23 @@ const App: React.FC = () => {
     peer.on('connection', (conn: any) => {
       console.log('📞 Incoming connection from:', conn.peer);
       console.log('Current effective role:', effectiveRole);
+      console.log('Connection object state - open:', conn.open, 'peerConnection:', !!conn.peerConnection);
       if (effectiveRole === NetworkRole.HOST) {
         console.log('✅ Accepting connection as HOST');
         connRef.current = conn;
         setIsConnected(true);  // Set immediately when connection arrives
         setupConnectionListeners(conn);
-        // syncToGuest will be called in the 'open' handler
+        // Monitor connection state every second for debugging
+        const monitorInterval = setInterval(() => {
+          if (conn.open) {
+            console.log('✅ Connection is now OPEN!');
+            clearInterval(monitorInterval);
+          } else {
+            console.log('⏳ Waiting for connection to open... current state:', conn.peerConnection?.iceConnectionState);
+          }
+        }, 1000);
+        // Stop monitoring after 15 seconds
+        setTimeout(() => clearInterval(monitorInterval), 15000);
       } else {
         console.log('⚠️ Rejecting connection (not in HOST role, role is:', effectiveRole);
       }
