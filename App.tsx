@@ -63,6 +63,7 @@ const App: React.FC = () => {
   const peerRef = useRef<any>(null);
   const connRef = useRef<any>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const saveState = useCallback(() => {
     const data = { status, players, dice, timeLeft, turnResult, role, targetId, peerId };
@@ -146,9 +147,14 @@ const App: React.FC = () => {
     setRole(NetworkRole.GUEST);
     setupConnectionListeners(conn);
 
+    // Clear any existing timeout
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+    }
+
     // Add connection timeout
-    setTimeout(() => {
-      if (!isConnected) {
+    connectionTimeoutRef.current = setTimeout(() => {
+      if (!connRef.current?.open) {
         console.error('Connection timeout - could not reach host');
         alert('Could not connect to host. Make sure the key is correct and the host is online.');
       }
@@ -159,6 +165,11 @@ const App: React.FC = () => {
     conn.on('open', () => {
       console.log('Connection established!');
       setIsConnected(true);
+      // Clear timeout on successful connection
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+        connectionTimeoutRef.current = null;
+      }
     });
     conn.on('data', (data: NetworkMessage) => {
       console.log('Received data:', data.type);
