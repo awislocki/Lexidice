@@ -116,8 +116,11 @@ const App: React.FC = () => {
     return `${word}-${numbers}`;
   };
 
-  const setupPeer = useCallback((customId?: string) => {
+  const setupPeer = useCallback((customId?: string, peerRole?: NetworkRole) => {
     if (peerRef.current) peerRef.current.destroy();
+    const effectiveRole = peerRole || role;
+    console.log('Setting up peer with role:', effectiveRole);
+
     // @ts-ignore
     const peer = new window.Peer(customId, {
       config: {
@@ -155,19 +158,20 @@ const App: React.FC = () => {
     peer.on('open', (id: string) => {
       console.log('Peer opened with ID:', id);
       setPeerId(id);
-      if (role === NetworkRole.GUEST && targetId) connectToHost(targetId);
+      if (effectiveRole === NetworkRole.GUEST && targetId) connectToHost(targetId);
     });
 
     peer.on('connection', (conn: any) => {
       console.log('📞 Incoming connection from:', conn.peer);
-      if (role === NetworkRole.HOST) {
+      console.log('Current effective role:', effectiveRole);
+      if (effectiveRole === NetworkRole.HOST) {
         console.log('✅ Accepting connection as HOST');
         connRef.current = conn;
         setIsConnected(true);
         setupConnectionListeners(conn);
         syncToGuest();
       } else {
-        console.log('⚠️ Rejecting connection (not in HOST role)');
+        console.log('⚠️ Rejecting connection (not in HOST role, role is:', effectiveRole);
       }
     });
 
@@ -175,7 +179,7 @@ const App: React.FC = () => {
       console.error('Peer error:', err.type, err.message);
       if (err.type === 'unavailable-id') {
         // ID collision is extremely rare with 4-digit suffix, but retry with new ID
-        setupPeer(generateFunnyId());
+        setupPeer(generateFunnyId(), effectiveRole);  // Preserve role when retrying
       } else {
         alert('Connection error: ' + err.type + '\n' + err.message);
       }
@@ -184,15 +188,17 @@ const App: React.FC = () => {
   }, [role, targetId]);
 
   const startHosting = () => {
+    console.log('Starting hosting...');
     setRole(NetworkRole.HOST);
-    setupPeer(generateFunnyId());
+    setupPeer(generateFunnyId(), NetworkRole.HOST);  // Pass role explicitly
   };
 
   const connectToHost = (id: string) => {
     console.log('connectToHost called with ID:', id);
     if (!peerRef.current) {
         console.log('No peer exists, creating one...');
-        setupPeer();
+        setRole(NetworkRole.GUEST);
+        setupPeer(undefined, NetworkRole.GUEST);  // Pass GUEST role explicitly
         setTimeout(() => {
           console.log('Retrying connection after peer creation...');
           connectToHost(id);
