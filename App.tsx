@@ -396,8 +396,8 @@ const App: React.FC = () => {
           )}
         </div>
 
-        <button 
-          disabled={role !== NetworkRole.LOCAL && !isConnected}
+        <button
+          disabled={role === NetworkRole.GUEST || (role !== NetworkRole.LOCAL && !isConnected)}
           onClick={startGame}
           className="w-full py-6 bg-white text-slate-950 rounded-[2rem] font-black text-3xl shadow-[0_10px_30px_rgba(255,255,255,0.1)] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale uppercase tracking-tighter"
         >
