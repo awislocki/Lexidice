@@ -181,8 +181,9 @@ const App: React.FC = () => {
       if (effectiveRole === NetworkRole.HOST) {
         console.log('✅ Accepting connection as HOST');
         connRef.current = conn;
+        setIsConnected(true);  // Set immediately when connection arrives
         setupConnectionListeners(conn);
-        // Note: setIsConnected and syncToGuest will be called in the 'open' handler
+        // syncToGuest will be called in the 'open' handler
       } else {
         console.log('⚠️ Rejecting connection (not in HOST role, role is:', effectiveRole);
       }
