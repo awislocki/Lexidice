@@ -102,7 +102,8 @@ const App: React.FC = () => {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          // Add TURN server for cross-network connections
+          { urls: 'stun:stun2.l.google.com:19302' },
+          // Multiple TURN servers for better reliability
           {
             urls: 'turn:openrelay.metered.ca:80',
             username: 'openrelayproject',
@@ -112,9 +113,17 @@ const App: React.FC = () => {
             urls: 'turn:openrelay.metered.ca:443',
             username: 'openrelayproject',
             credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
           }
-        ]
-      }
+        ],
+        iceTransportPolicy: 'all', // Try all connection types
+        iceCandidatePoolSize: 10
+      },
+      debug: 2 // Enable debug logging
     });
     peerRef.current = peer;
 
@@ -180,8 +189,23 @@ const App: React.FC = () => {
   };
 
   const setupConnectionListeners = (conn: any) => {
+    // Log ICE connection state changes
+    if (conn.peerConnection) {
+      conn.peerConnection.oniceconnectionstatechange = () => {
+        console.log('ICE connection state:', conn.peerConnection.iceConnectionState);
+      };
+      conn.peerConnection.onicegatheringstatechange = () => {
+        console.log('ICE gathering state:', conn.peerConnection.iceGatheringState);
+      };
+      conn.peerConnection.onicecandidate = (event: any) => {
+        if (event.candidate) {
+          console.log('ICE candidate:', event.candidate.type, event.candidate.protocol);
+        }
+      };
+    }
+
     conn.on('open', () => {
-      console.log('Connection established!');
+      console.log('✅ Connection established!');
       setIsConnected(true);
       // Clear timeout on successful connection
       if (connectionTimeoutRef.current) {
