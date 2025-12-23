@@ -96,11 +96,13 @@ const App: React.FC = () => {
     peerRef.current = peer;
 
     peer.on('open', (id: string) => {
+      console.log('Peer opened with ID:', id);
       setPeerId(id);
       if (role === NetworkRole.GUEST && targetId) connectToHost(targetId);
     });
 
     peer.on('connection', (conn: any) => {
+      console.log('Incoming connection from:', conn.peer);
       if (role === NetworkRole.HOST) {
         connRef.current = conn;
         setIsConnected(true);
@@ -110,9 +112,12 @@ const App: React.FC = () => {
     });
 
     peer.on('error', (err: any) => {
+      console.error('Peer error:', err.type, err.message);
       if (err.type === 'unavailable-id') {
         const nextTry = generateFunnyId().substring(0, 4) + Math.floor(Math.random() * 89 + 10);
         setupPeer(nextTry);
+      } else {
+        alert('Connection error: ' + err.type + '\n' + err.message);
       }
     });
     return peer;
@@ -130,17 +135,40 @@ const App: React.FC = () => {
         return;
     }
     const cleanId = id.trim().toUpperCase();
+    console.log('Attempting to connect to:', cleanId);
     const conn = peerRef.current.connect(cleanId);
     connRef.current = conn;
     setTargetId(cleanId);
     setRole(NetworkRole.GUEST);
     setupConnectionListeners(conn);
+
+    // Add connection timeout
+    setTimeout(() => {
+      if (!isConnected) {
+        console.error('Connection timeout - could not reach host');
+        alert('Could not connect to host. Make sure the key is correct and the host is online.');
+      }
+    }, 10000);
   };
 
   const setupConnectionListeners = (conn: any) => {
-    conn.on('open', () => setIsConnected(true));
-    conn.on('data', (data: NetworkMessage) => handleNetworkMessage(data));
-    conn.on('close', () => setIsConnected(false));
+    conn.on('open', () => {
+      console.log('Connection established!');
+      setIsConnected(true);
+    });
+    conn.on('data', (data: NetworkMessage) => {
+      console.log('Received data:', data.type);
+      handleNetworkMessage(data);
+    });
+    conn.on('close', () => {
+      console.log('Connection closed');
+      setIsConnected(false);
+    });
+    conn.on('error', (err: any) => {
+      console.error('Connection error:', err);
+      alert('Connection lost: ' + err.message);
+      setIsConnected(false);
+    });
   };
 
   const syncToGuest = useCallback(() => {
