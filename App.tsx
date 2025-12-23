@@ -97,7 +97,25 @@ const App: React.FC = () => {
   const setupPeer = useCallback((customId?: string) => {
     if (peerRef.current) peerRef.current.destroy();
     // @ts-ignore
-    const peer = new window.Peer(customId);
+    const peer = new window.Peer(customId, {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          // Add TURN server for cross-network connections
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          }
+        ]
+      }
+    });
     peerRef.current = peer;
 
     peer.on('open', (id: string) => {
