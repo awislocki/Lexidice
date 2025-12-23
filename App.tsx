@@ -158,159 +158,52 @@ const App: React.FC = () => {
     }
   };
 
-  const connectToHost = (id: string) => {
+  const connectToHost = async (id: string) => {
     console.log('connectToHost called with ID:', id);
-    if (!peerRef.current) {
-        console.log('No peer exists, creating one...');
-        setRole(NetworkRole.GUEST);
-        setupPeer(undefined, NetworkRole.GUEST);  // Pass GUEST role explicitly
-        setTimeout(() => {
-          console.log('Retrying connection after peer creation...');
-          connectToHost(id);
-        }, 500);
-        return;
-    }
     const cleanId = id.trim().toUpperCase();
-    console.log('Attempting to connect to:', cleanId);
-    const conn = peerRef.current.connect(cleanId, {
-      reliable: true,  // Use reliable data channel
-      serialization: 'json'
-    });
-    console.log('Connection object created:', conn);
-    connRef.current = conn;
-    setTargetId(cleanId);
-    setRole(NetworkRole.GUEST);
-    setupConnectionListeners(conn);
 
-    // Clear any existing timeout
-    if (connectionTimeoutRef.current) {
-      clearTimeout(connectionTimeoutRef.current);
-    }
+    const success = await roomServiceRef.current.joinRoom(cleanId);
 
-    // Add connection timeout
-    connectionTimeoutRef.current = setTimeout(() => {
-      if (!connRef.current?.open) {
-        console.error('Connection timeout - could not reach host');
-        alert('Could not connect to host. Make sure the key is correct and the host is online.');
-      }
-    }, 10000);
-  };
-
-  const setupConnectionListeners = (conn: any) => {
-    console.log('Setting up connection listeners for:', conn.peer);
-
-    // Log ICE connection state changes
-    if (conn.peerConnection) {
-      console.log('PeerConnection exists, setting up ICE listeners');
-
-      conn.peerConnection.oniceconnectionstatechange = () => {
-        console.log('🔵 ICE connection state:', conn.peerConnection.iceConnectionState);
-      };
-
-      conn.peerConnection.onicegatheringstatechange = () => {
-        console.log('🔵 ICE gathering state:', conn.peerConnection.iceGatheringState);
-      };
-
-      conn.peerConnection.onicecandidate = (event: any) => {
-        if (event.candidate) {
-          console.log('🔵 ICE candidate:', event.candidate.type, event.candidate.protocol);
-          // Log full candidate to see relay details
-          if (event.candidate.type === 'relay') {
-            console.log('🎯 RELAY CANDIDATE FOUND:', event.candidate.candidate);
-          }
-        } else {
-          console.log('🔵 ICE candidate gathering complete');
-        }
-      };
-
-      conn.peerConnection.onsignalingstatechange = () => {
-        console.log('🔵 Signaling state:', conn.peerConnection.signalingState);
-      };
-    } else {
-      console.log('⚠️ No peerConnection available yet');
-    }
-
-    conn.on('open', () => {
-      console.log('✅ Connection OPEN event fired! conn.open:', conn.open, 'conn.peer:', conn.peer);
+    if (success) {
+      setPeerId(cleanId);
+      setTargetId(cleanId);
+      setRole(NetworkRole.GUEST);
       setIsConnected(true);
-      // Clear timeout on successful connection
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
-      }
-      // If we're the host, send initial sync when connection opens
-      console.log('Connection opened, triggering initial sync in 100ms');
-      setTimeout(() => {
-        console.log('Initial sync timeout fired');
-        syncToGuest();
-      }, 100);  // Small delay to ensure state is ready
-    });
+      console.log('✅ Joined room, starting polling for updates');
 
-    conn.on('data', (data: NetworkMessage) => {
-      console.log('📨 Received data:', data.type);
-      handleNetworkMessage(data);
-    });
-
-    conn.on('close', () => {
-      console.log('❌ Connection CLOSE event');
-      setIsConnected(false);
-    });
-
-    conn.on('error', (err: any) => {
-      console.error('❌ Connection ERROR event:', err);
-      alert('Connection lost: ' + err.message);
-      setIsConnected(false);
-    });
+      // Start polling for game state updates from host
+      roomServiceRef.current.startPolling((roomState) => {
+        console.log('📥 Received room update:', roomState.status);
+        setStatus(roomState.status);
+        setPlayers(roomState.players);
+        setDice(roomState.dice);
+        setTimeLeft(roomState.timeLeft);
+        setTurnResult(roomState.turnResult);
+        setIsJudging(roomState.isJudging);
+      }, 500);
+    } else {
+      alert('Could not find room. Make sure the code is correct and the host is online.');
+    }
   };
 
-  const syncToGuest = useCallback(() => {
-    console.log('syncToGuest called, role:', role, 'hasConn:', !!connRef.current, 'connOpen:', connRef.current?.open);
-    if (role === NetworkRole.HOST && connRef.current && connRef.current.open) {
-      console.log('📤 Sending SYNC_STATE to guest:', { status, players: players.length, dice: dice.length });
-      connRef.current.send({
-        type: 'SYNC_STATE',
-        payload: { status, players, dice, timeLeft, turnResult, isJudging }
+  // Sync game state to room (for host)
+  const syncState = useCallback(() => {
+    if (role === NetworkRole.HOST) {
+      roomServiceRef.current.updateState({
+        status,
+        players,
+        dice,
+        timeLeft,
+        turnResult,
+        isJudging
       });
-    } else {
-      console.log('⚠️ Cannot sync - conditions not met');
     }
   }, [role, status, players, dice, timeLeft, turnResult, isJudging]);
 
-  const handleNetworkMessage = (msg: NetworkMessage) => {
-    console.log('📨 handleNetworkMessage:', msg.type);
-    switch (msg.type) {
-      case 'SYNC_STATE':
-        console.log('📥 Applying SYNC_STATE:', { status: msg.payload.status, players: msg.payload.players.length, dice: msg.payload.dice.length });
-        setStatus(msg.payload.status);
-        setPlayers(msg.payload.players);
-        setDice(msg.payload.dice);
-        setTimeLeft(msg.payload.timeLeft);
-        setTurnResult(msg.payload.turnResult);
-        setIsJudging(msg.payload.isJudging);
-        break;
-      case 'UPDATE_WORD':
-        console.log('📥 UPDATE_WORD from player:', msg.payload.id);
-        if (role === NetworkRole.HOST) {
-          setPlayers(prev => prev.map(p => p.id === msg.payload.id ? { ...p, currentWord: msg.payload.word } : p));
-        }
-        break;
-      case 'COMMIT_WORD':
-        console.log('📥 COMMIT_WORD from player:', msg.payload.id);
-        if (role === NetworkRole.HOST) {
-          setPlayers(prev => prev.map(p => p.id === msg.payload.id ? { ...p, isCommitted: true } : p));
-        }
-        break;
-    }
-  };
-
-  useEffect(() => { if (role === NetworkRole.LOCAL) setupPeer(); }, []);
+  // Auto-sync when game state changes (host only)
   useEffect(() => {
-    console.log('Sync useEffect triggered. status:', status, 'role:', role);
-    if (role === NetworkRole.HOST) {
-      console.log('Calling syncToGuest from useEffect');
-      syncToGuest();
-    }
-  }, [status, players, dice, timeLeft, turnResult, isJudging, role, syncToGuest]);
+    syncState();
+  }, [syncState]);
 
   const rollDice = useCallback(() => {
     const newDice: DiceLetter[] = [];
@@ -348,21 +241,25 @@ const App: React.FC = () => {
   const handleWordChange = (word: string) => {
     const myId = role === NetworkRole.GUEST ? 2 : 1;
     if (players.find(p => p.id === myId)?.isCommitted) return;
-    if (role === NetworkRole.LOCAL || role === NetworkRole.HOST) {
-      setPlayers(prev => prev.map(p => p.id === myId ? { ...p, currentWord: word.toUpperCase() } : p));
-    } else {
-      connRef.current?.send({ type: 'UPDATE_WORD', payload: { id: 2, word: word.toUpperCase() } });
-      setPlayers(prev => prev.map(p => p.id === 2 ? { ...p, currentWord: word.toUpperCase() } : p));
+
+    const updatedPlayers = players.map(p => p.id === myId ? { ...p, currentWord: word.toUpperCase() } : p);
+    setPlayers(updatedPlayers);
+
+    // Guest sends word update through room service
+    if (role === NetworkRole.GUEST) {
+      roomServiceRef.current.updateState({ players: updatedPlayers }, true);
     }
   };
 
   const handleCommit = () => {
     const myId = role === NetworkRole.GUEST ? 2 : 1;
-    if (role === NetworkRole.LOCAL || role === NetworkRole.HOST) {
-      setPlayers(prev => prev.map(p => p.id === myId ? { ...p, isCommitted: true } : p));
-    } else {
-      connRef.current?.send({ type: 'COMMIT_WORD', payload: { id: 2 } });
-      setPlayers(prev => prev.map(p => p.id === 2 ? { ...p, isCommitted: true } : p));
+
+    const updatedPlayers = players.map(p => p.id === myId ? { ...p, isCommitted: true } : p);
+    setPlayers(updatedPlayers);
+
+    // Guest sends commit through room service
+    if (role === NetworkRole.GUEST) {
+      roomServiceRef.current.updateState({ players: updatedPlayers }, true);
     }
   };
 
