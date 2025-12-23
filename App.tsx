@@ -61,6 +61,7 @@ const App: React.FC = () => {
   const [peerId, setPeerId] = useState<string>('');
   const [targetId, setTargetId] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
+  const [guestConnected, setGuestConnected] = useState(false);
   const roomServiceRef = useRef<RoomService>(new RoomService());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -149,8 +150,9 @@ const App: React.FC = () => {
 
       // Start polling to detect when guest joins
       roomServiceRef.current.startPolling((roomState) => {
-        if (roomState.guestConnected) {
+        if (roomState.guestConnected && !guestConnected) {
           console.log('✅ Guest connected!');
+          setGuestConnected(true);
         }
       }, 1000);
     } else {
@@ -297,6 +299,17 @@ const App: React.FC = () => {
     return () => { if (timerRef.current) clearInterval(timerRef.current as any); };
   }, [status, role, submitTurn, players]);
 
+  // Check if both players committed - if so, submit turn immediately
+  useEffect(() => {
+    if (role !== NetworkRole.GUEST && status === GameStatus.PLAYING && !isJudging) {
+      const bothCommitted = players.every(p => p.isCommitted);
+      if (bothCommitted) {
+        console.log('Both players committed - submitting turn immediately');
+        submitTurn(players);
+      }
+    }
+  }, [players, status, role, isJudging, submitTurn]);
+
   useEffect(() => {
     if (players.some(p => p.score >= MAX_SCORE) && status === GameStatus.JUDGING && !isJudging) {
       setStatus(GameStatus.GAME_OVER);
@@ -385,14 +398,14 @@ const App: React.FC = () => {
         </div>
 
         <button
-          disabled={role === NetworkRole.GUEST || (role !== NetworkRole.LOCAL && !isConnected)}
+          disabled={role === NetworkRole.GUEST || (role === NetworkRole.HOST && !guestConnected)}
           onClick={() => {
-            console.log('Start button clicked. Role:', role, 'isConnected:', isConnected, 'disabled:', (role === NetworkRole.GUEST || (role !== NetworkRole.LOCAL && !isConnected)));
+            console.log('Start button clicked. Role:', role, 'guestConnected:', guestConnected);
             startGame();
           }}
           className="w-full py-6 bg-white text-slate-950 rounded-[2rem] font-black text-3xl shadow-[0_10px_30px_rgba(255,255,255,0.1)] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale uppercase tracking-tighter"
         >
-          {role === NetworkRole.GUEST ? 'Waiting for Host' : 'Commence Battle'}
+          {role === NetworkRole.GUEST ? 'Waiting for Host' : (role === NetworkRole.HOST && !guestConnected ? 'Waiting for Guest...' : 'Commence Battle')}
         </button>
       </div>
     </div>
@@ -520,8 +533,11 @@ const App: React.FC = () => {
         <div className="flex gap-4 bg-slate-900/80 px-5 py-2.5 rounded-2xl border border-slate-800 shadow-xl">
           <div className="flex items-center gap-3">
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-slate-700'}`}></div>
-            <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isConnected ? 'text-green-500' : 'text-slate-500'}`}>
-              {role === NetworkRole.LOCAL ? 'OFFLINE MODE' : isConnected ? 'NETWORK STABLE' : 'LINKING...'}
+            <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isConnected && (role !== NetworkRole.HOST || guestConnected) ? 'text-green-500' : 'text-yellow-500'}`}>
+              {role === NetworkRole.LOCAL ? 'OFFLINE MODE' :
+               role === NetworkRole.HOST && !guestConnected ? 'WAITING FOR GUEST' :
+               role === NetworkRole.GUEST && !isConnected ? 'CONNECTING...' :
+               'NETWORK STABLE'}
             </span>
           </div>
         </div>
