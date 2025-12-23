@@ -4,7 +4,6 @@ import { GameStatus, Player, DiceLetter, TurnResult, NetworkRole, NetworkMessage
 import { LETTER_VALUES, VOWELS, CONSONANTS, MAX_SCORE, TURN_TIME } from './constants';
 import { judgeWords } from './services/geminiService';
 import DiceIcon from './components/DiceIcon';
-import { RoomService } from './services/roomService';
 
 const STORAGE_KEY = 'lexidice_state';
 
@@ -61,8 +60,10 @@ const App: React.FC = () => {
   const [peerId, setPeerId] = useState<string>('');
   const [targetId, setTargetId] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
-  const roomServiceRef = useRef<RoomService>(new RoomService());
+  const peerRef = useRef<any>(null);
+  const connRef = useRef<any>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debug console for mobile
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
@@ -72,8 +73,9 @@ const App: React.FC = () => {
   const resetEverything = () => {
     if (confirm('Reset everything? This will end the game and disconnect.')) {
       console.log('Resetting everything...');
-      // Leave room
-      roomServiceRef.current.leaveRoom();
+      // Destroy peer connection
+      if (peerRef.current) peerRef.current.destroy();
+      if (connRef.current) connRef.current.close();
       // Clear all state
       localStorage.removeItem(STORAGE_KEY);
       // Reload page
@@ -128,34 +130,95 @@ const App: React.FC = () => {
     return `${word}-${numbers}`;
   };
 
-  const startHosting = async () => {
-    console.log('Starting hosting...');
-    const roomId = generateFunnyId();
+  const setupPeer = useCallback((customId?: string, peerRole?: NetworkRole) => {
+    if (peerRef.current) peerRef.current.destroy();
+    const effectiveRole = peerRole || role;
+    console.log('Setting up peer with role:', effectiveRole);
 
-    const success = await roomServiceRef.current.createRoom(roomId, {
-      status,
-      players,
-      dice,
-      timeLeft,
-      turnResult,
-      isJudging
+    // @ts-ignore
+    const peer = new window.Peer(customId, {
+      host: '0.peerjs.com',
+      port: 443,
+      path: '/',
+      secure: true,
+      config: {
+        iceServers: [
+          // Google STUN
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          // Twilio STUN (more reliable)
+          { urls: 'stun:global.stun.twilio.com:3478' },
+          // Open relay TURN servers
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          }
+        ],
+        iceTransportPolicy: 'all',
+        iceCandidatePoolSize: 10
+      },
+      debug: 3 // Maximum debug logging
+    });
+    peerRef.current = peer;
+
+    peer.on('open', (id: string) => {
+      console.log('Peer opened with ID:', id);
+      setPeerId(id);
+      if (effectiveRole === NetworkRole.GUEST && targetId) connectToHost(targetId);
     });
 
-    if (success) {
-      setPeerId(roomId);
-      setRole(NetworkRole.HOST);
-      setIsConnected(true);
-      console.log('✅ Room created, waiting for guest');
+    peer.on('connection', (conn: any) => {
+      console.log('📞 Incoming connection from:', conn.peer);
+      console.log('Current effective role:', effectiveRole);
+      console.log('Connection object state - open:', conn.open, 'peerConnection:', !!conn.peerConnection);
+      if (effectiveRole === NetworkRole.HOST) {
+        console.log('✅ Accepting connection as HOST');
+        connRef.current = conn;
+        setIsConnected(true);  // Set immediately when connection arrives
+        setupConnectionListeners(conn);
+        // Monitor connection state every second for debugging
+        const monitorInterval = setInterval(() => {
+          if (conn.open) {
+            console.log('✅ Connection is now OPEN!');
+            clearInterval(monitorInterval);
+          } else {
+            console.log('⏳ Waiting for connection to open... current state:', conn.peerConnection?.iceConnectionState);
+          }
+        }, 1000);
+        // Stop monitoring after 15 seconds
+        setTimeout(() => clearInterval(monitorInterval), 15000);
+      } else {
+        console.log('⚠️ Rejecting connection (not in HOST role, role is:', effectiveRole);
+      }
+    });
 
-      // Start polling to detect when guest joins
-      roomServiceRef.current.startPolling((roomState) => {
-        if (roomState.guestConnected) {
-          console.log('✅ Guest connected!');
-        }
-      }, 1000);
-    } else {
-      alert('Failed to create room. Please try again.');
-    }
+    peer.on('error', (err: any) => {
+      console.error('Peer error:', err.type, err.message);
+      if (err.type === 'unavailable-id') {
+        // ID collision is extremely rare with 4-digit suffix, but retry with new ID
+        setupPeer(generateFunnyId(), effectiveRole);  // Preserve role when retrying
+      } else {
+        alert('Connection error: ' + err.type + '\n' + err.message);
+      }
+    });
+    return peer;
+  }, [role, targetId]);
+
+  const startHosting = () => {
+    console.log('Starting hosting...');
+    setRole(NetworkRole.HOST);
+    setupPeer(generateFunnyId(), NetworkRole.HOST);  // Pass role explicitly
   };
 
   const connectToHost = (id: string) => {
