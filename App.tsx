@@ -69,6 +69,20 @@ const App: React.FC = () => {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState(false);
 
+  // Reset function
+  const resetEverything = () => {
+    if (confirm('Reset everything? This will end the game and disconnect.')) {
+      console.log('Resetting everything...');
+      // Destroy peer connection
+      if (peerRef.current) peerRef.current.destroy();
+      if (connRef.current) connRef.current.close();
+      // Clear all state
+      localStorage.removeItem(STORAGE_KEY);
+      // Reload page
+      window.location.reload();
+    }
+  };
+
   const saveState = useCallback(() => {
     const data = { status, players, dice, timeLeft, turnResult, role, targetId, peerId };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -167,9 +181,8 @@ const App: React.FC = () => {
       if (effectiveRole === NetworkRole.HOST) {
         console.log('✅ Accepting connection as HOST');
         connRef.current = conn;
-        setIsConnected(true);
         setupConnectionListeners(conn);
-        syncToGuest();
+        // Note: setIsConnected and syncToGuest will be called in the 'open' handler
       } else {
         console.log('⚠️ Rejecting connection (not in HOST role, role is:', effectiveRole);
       }
@@ -269,6 +282,9 @@ const App: React.FC = () => {
         clearTimeout(connectionTimeoutRef.current);
         connectionTimeoutRef.current = null;
       }
+      // If we're the host, send initial sync when connection opens
+      console.log('Connection opened, triggering initial sync');
+      setTimeout(() => syncToGuest(), 100);  // Small delay to ensure state is ready
     });
 
     conn.on('data', (data: NetworkMessage) => {
@@ -289,17 +305,23 @@ const App: React.FC = () => {
   };
 
   const syncToGuest = useCallback(() => {
+    console.log('syncToGuest called, role:', role, 'hasConn:', !!connRef.current, 'connOpen:', connRef.current?.open);
     if (role === NetworkRole.HOST && connRef.current && connRef.current.open) {
+      console.log('📤 Sending SYNC_STATE to guest:', { status, players: players.length, dice: dice.length });
       connRef.current.send({
         type: 'SYNC_STATE',
         payload: { status, players, dice, timeLeft, turnResult, isJudging }
       });
+    } else {
+      console.log('⚠️ Cannot sync - conditions not met');
     }
   }, [role, status, players, dice, timeLeft, turnResult, isJudging]);
 
   const handleNetworkMessage = (msg: NetworkMessage) => {
+    console.log('📨 handleNetworkMessage:', msg.type);
     switch (msg.type) {
       case 'SYNC_STATE':
+        console.log('📥 Applying SYNC_STATE:', { status: msg.payload.status, players: msg.payload.players.length, dice: msg.payload.dice.length });
         setStatus(msg.payload.status);
         setPlayers(msg.payload.players);
         setDice(msg.payload.dice);
@@ -308,11 +330,13 @@ const App: React.FC = () => {
         setIsJudging(msg.payload.isJudging);
         break;
       case 'UPDATE_WORD':
+        console.log('📥 UPDATE_WORD from player:', msg.payload.id);
         if (role === NetworkRole.HOST) {
           setPlayers(prev => prev.map(p => p.id === msg.payload.id ? { ...p, currentWord: msg.payload.word } : p));
         }
         break;
       case 'COMMIT_WORD':
+        console.log('📥 COMMIT_WORD from player:', msg.payload.id);
         if (role === NetworkRole.HOST) {
           setPlayers(prev => prev.map(p => p.id === msg.payload.id ? { ...p, isCommitted: true } : p));
         }
@@ -651,13 +675,23 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Debug Console Toggle Button */}
-      <button
-        onClick={() => setShowDebug(!showDebug)}
-        className="fixed bottom-4 right-4 w-12 h-12 bg-pink-600 text-white rounded-full shadow-lg font-black text-xs z-50 hover:bg-pink-700 active:scale-95 transition-all"
-      >
-        {showDebug ? '✕' : 'LOG'}
-      </button>
+      {/* Bottom Right Controls */}
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2 z-50">
+        <button
+          onClick={resetEverything}
+          className="w-12 h-12 bg-red-600 text-white rounded-full shadow-lg font-black text-xs hover:bg-red-700 active:scale-95 transition-all"
+          title="Reset everything"
+        >
+          ↻
+        </button>
+        <button
+          onClick={() => setShowDebug(!showDebug)}
+          className="w-12 h-12 bg-pink-600 text-white rounded-full shadow-lg font-black text-xs hover:bg-pink-700 active:scale-95 transition-all"
+          title="Toggle debug console"
+        >
+          {showDebug ? '✕' : 'LOG'}
+        </button>
+      </div>
 
       {/* Debug Console */}
       {showDebug && (
