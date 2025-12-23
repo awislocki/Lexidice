@@ -159,12 +159,15 @@ const App: React.FC = () => {
     });
 
     peer.on('connection', (conn: any) => {
-      console.log('Incoming connection from:', conn.peer);
+      console.log('📞 Incoming connection from:', conn.peer);
       if (role === NetworkRole.HOST) {
+        console.log('✅ Accepting connection as HOST');
         connRef.current = conn;
         setIsConnected(true);
         setupConnectionListeners(conn);
         syncToGuest();
+      } else {
+        console.log('⚠️ Rejecting connection (not in HOST role)');
       }
     });
 
@@ -219,23 +222,41 @@ const App: React.FC = () => {
   };
 
   const setupConnectionListeners = (conn: any) => {
+    console.log('Setting up connection listeners for:', conn.peer);
+
     // Log ICE connection state changes
     if (conn.peerConnection) {
+      console.log('PeerConnection exists, setting up ICE listeners');
+
       conn.peerConnection.oniceconnectionstatechange = () => {
-        console.log('ICE connection state:', conn.peerConnection.iceConnectionState);
+        console.log('🔵 ICE connection state:', conn.peerConnection.iceConnectionState);
       };
+
       conn.peerConnection.onicegatheringstatechange = () => {
-        console.log('ICE gathering state:', conn.peerConnection.iceGatheringState);
+        console.log('🔵 ICE gathering state:', conn.peerConnection.iceGatheringState);
       };
+
       conn.peerConnection.onicecandidate = (event: any) => {
         if (event.candidate) {
-          console.log('ICE candidate:', event.candidate.type, event.candidate.protocol);
+          console.log('🔵 ICE candidate:', event.candidate.type, event.candidate.protocol);
+          // Log full candidate to see relay details
+          if (event.candidate.type === 'relay') {
+            console.log('🎯 RELAY CANDIDATE FOUND:', event.candidate.candidate);
+          }
+        } else {
+          console.log('🔵 ICE candidate gathering complete');
         }
       };
+
+      conn.peerConnection.onsignalingstatechange = () => {
+        console.log('🔵 Signaling state:', conn.peerConnection.signalingState);
+      };
+    } else {
+      console.log('⚠️ No peerConnection available yet');
     }
 
     conn.on('open', () => {
-      console.log('✅ Connection established!');
+      console.log('✅ Connection OPEN event fired!');
       setIsConnected(true);
       // Clear timeout on successful connection
       if (connectionTimeoutRef.current) {
@@ -243,16 +264,19 @@ const App: React.FC = () => {
         connectionTimeoutRef.current = null;
       }
     });
+
     conn.on('data', (data: NetworkMessage) => {
-      console.log('Received data:', data.type);
+      console.log('📨 Received data:', data.type);
       handleNetworkMessage(data);
     });
+
     conn.on('close', () => {
-      console.log('Connection closed');
+      console.log('❌ Connection CLOSE event');
       setIsConnected(false);
     });
+
     conn.on('error', (err: any) => {
-      console.error('Connection error:', err);
+      console.error('❌ Connection ERROR event:', err);
       alert('Connection lost: ' + err.message);
       setIsConnected(false);
     });
